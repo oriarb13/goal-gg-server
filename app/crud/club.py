@@ -258,13 +258,20 @@ def join_club(db: Session, club_id: int, current_user: User) -> dict:
     logger.info(f"User {current_user.id} attempting to join club {club_id}")
     
     try:
-        club = db.query(Club).filter(Club.id == club_id).first()
+        club = db.query(Club)\
+                .options(
+                    joinedload(Club.members).joinedload(Member.user),
+                    joinedload(Club.admin)
+                )\
+                .filter(Club.id == club_id)\
+                .first()
+        # check if club exists
         if not club:
             raise HTTPException(
                 status_code=404,
                 detail=f"Club not found with ID: {club_id}"
             )
-        
+        # check if user is already a member
         existing_member = db.query(Member).filter(
             Member.club_id == club_id,
             Member.user_id == current_user.id
@@ -275,7 +282,7 @@ def join_club(db: Session, club_id: int, current_user: User) -> dict:
                 status_code=409,
                 detail="User is already a member of this club"
             )
-        
+        # check if club is full
         current_members_count = len(club.members)
         if current_members_count >= club.max_players:
             raise HTTPException(
@@ -283,6 +290,7 @@ def join_club(db: Session, club_id: int, current_user: User) -> dict:
                 detail="Club has reached maximum members limit"
             )
         
+        # check if club is private
         if club.is_private:
             if current_user.id not in club.pending_requests:
                 club.pending_requests.append(current_user.id)
@@ -291,6 +299,7 @@ def join_club(db: Session, club_id: int, current_user: User) -> dict:
             else:
                 return {"request_status": "already_pending"}
         
+        # add user to club
         new_member = Member(
             user_id=current_user.id,
             club_id=club_id,
@@ -318,7 +327,67 @@ def join_club(db: Session, club_id: int, current_user: User) -> dict:
             detail=f"Failed to join club: {str(e)}"
         )
 
-def leave_club(db: Session, club_id: int, current_user: User) -> dict:
+def accept_request(db: Session, club_id: int, current_user: User, request_id: int) -> dict:
+    logger.info(f"User {current_user.id} attempting to accept request for club {club_id}")
+    try:
+        club = db.query(Club).filter(Club.id == club_id).first()
+        user_request = db.query(User).filter(User.id == request_id).first()
+        if not club:
+            logger.warning(f"Club not found with ID: {club_id}")
+            raise HTTPException(
+                status_code=404,
+                detail=f"Club not found with ID: {club_id}"
+            )
+        
+        if club.admin_id != current_user.id:
+            logger.warning(f"User {current_user.id} is not the admin of club {club_id}")
+            raise HTTPException(
+                status_code=403,
+                detail="Only club admin can accept requests"
+            )
+
+        if request_id not in club.pending_requests:
+            logger.warning(f"Request not found with ID: {request_id} in club {club_id}")
+            raise HTTPException(
+                status_code=404,
+                detail=f"Request not found with ID: {request_id}"
+            )
+
+        # add user to club
+        new_member = Member(
+            user_id=request_id,
+            club_id=club_id,
+            total_goals=0,
+            total_assists=0,
+            total_games=0,
+            skill_rating=user_request.avg_skill_rating,
+            positions=user_request.positions
+        )
+
+        db.add(new_member)
+        db.commit()
+        db.refresh(new_member)
+
+        # remove request from pending_requests
+        club.pending_requests.remove(request_id)
+        db.commit()
+
+        logger.info(f"Request accepted for club {club_id} by user {current_user.id}")
+        return {"membership_status": "joined"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to accept request for club {club_id}: {e}")
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to accept request: {str(e)}"
+        )
+    
+
+
+def leave_club(db: Session, club_id: int, current_user: User , user_id: Optional[int] = None) -> dict:
     logger.info(f"User {current_user.id} attempting to leave club {club_id}")
     
     try:
@@ -329,16 +398,21 @@ def leave_club(db: Session, club_id: int, current_user: User) -> dict:
                 detail=f"Club not found with ID: {club_id}"
             )
         
-        if club.admin_id == current_user.id:
+        if club.admin_id == current_user.id and user_id == None:
             raise HTTPException(
                 status_code=403,
                 detail="Club admin cannot leave the club"
             )
-        
-        member = db.query(Member).filter(
-            Member.club_id == club_id,
-            Member.user_id == current_user.id
-        ).first()
+        if user_id:
+            member = db.query(Member).filter(
+                Member.club_id == club_id,
+                Member.user_id == user_id
+            ).first()
+        else:
+            member = db.query(Member).filter(
+                Member.club_id == club_id,
+                Member.user_id == current_user.id
+            ).first()
         
         if not member:
             raise HTTPException(

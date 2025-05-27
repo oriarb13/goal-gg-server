@@ -22,12 +22,19 @@ def register(db: Session, user: UserCreate) -> UserFull:
                 detail="Email already registered"
             )
         
-        existing_phone = db.query(User).filter(User.phone == user.phone).first()
-        if existing_phone:
-            logger.warning(f"Phone already exists: {user.phone}")
+        # Convert Phone Pydantic model to dict
+        phone_dict = user.phone.model_dump() if user.phone else {"prefix": None, "number": None}
+        
+        # Check for existing phone using JSON operations
+        existing_phone = db.query(User).filter(
+            User.phone['number'].astext == phone_dict.get('number')
+        ).first()
+        
+        if existing_phone and phone_dict.get('number'):  # Only check if number is provided
+            logger.warning(f"Phone number already exists: {phone_dict.get('number')}")
             raise HTTPException(
                 status_code=409,
-                detail="Phone already registered"
+                detail="Phone number already registered"
             )
         
         hashed_password = hash_password(user.password)
@@ -36,7 +43,7 @@ def register(db: Session, user: UserCreate) -> UserFull:
             last_name=user.last_name,
             email=user.email,
             password=hashed_password,
-            phone=user.phone,
+            phone=phone_dict,  # Use dict instead of Pydantic model
             sport_category=user.sport_category,
             year_of_birth=user.year_of_birth,
             city=user.city,
@@ -168,22 +175,22 @@ def change_role(db: Session, user_id: int, new_role_id: int) -> UserFull:
                 status_code=403,
                 detail="Cannot change role to user if user has owned clubs"
             )
-        if new_role_id == 2 and len(user.clubs) > 1:
+        if new_role_id == 2 and len(user.owned_clubs) > 1:
             raise HTTPException(
                 status_code=403,
                 detail="Cannot change role to silver if user has more than 1 club"
             )
-        if new_role_id == 3 and len(user.clubs) > 3:
+        if new_role_id == 3 and len(user.owned_clubs) > 3:
             raise HTTPException(
                 status_code=403,
                 detail="Cannot change role to gold if user has more than 3 clubs"
             )
-        if new_role_id == 4 and len(user.clubs) > 5:
+        if new_role_id == 4 and len(user.owned_clubs) > 5:
             raise HTTPException(
                 status_code=403,
                 detail="Cannot change role to premium if user has more than 5 clubs"
             )
-        
+        user.role_id = new_role_id
         db.commit()
         db.refresh(user)
         

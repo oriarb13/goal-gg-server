@@ -38,11 +38,17 @@ class MembershipInfo(BaseModel):
     class Config:
         from_attributes = True
 
+class Phone(BaseModel):
+    prefix: Optional[str] = None
+    number: Optional[str] = None
+    class Config:
+        from_attributes = True
+
 # Create
 class UserCreate(BaseModel):
     first_name: str
     last_name: str
-    phone: Dict[str, str]       
+    phone: Phone       
     email: EmailStr
     password: str
     sport_category: SportCategoryEnum
