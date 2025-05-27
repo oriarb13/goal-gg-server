@@ -46,18 +46,18 @@ class ClubFull(BaseModel):
     description: str
     image: str
     admin_id: int
-    admin: UserInfo  # admin info
-    captains: List[int]  
-    captains_info: List[UserInfo] = []  # captains info
+    admin: Optional[UserInfo] = None  # admin info
+    captains_ids: Optional[List[int]] = []  
+    captains: Optional[List[MemberInfo]] = []  # captains info
     sport_category: SportCategoryEnum
     is_private: bool
     max_players: int
-    status: ClubStatusEnum
-    location: Dict
-    pending_requests: List[int]
-    created_at: datetime
-    updated_at: Optional[datetime]
-    members: List[MemberInfo] = []  # members info
+    status: Optional[ClubStatusEnum] = None
+    location: Optional[Dict] = None
+    pending_requests: Optional[List[int]] = []
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    members: Optional[List[MemberInfo]] = []  # members info
     
     class Config:
         from_attributes = True

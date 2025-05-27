@@ -34,7 +34,7 @@ def create_club(db: Session, club: ClubCreate, current_user: User) -> ClubFull:
             max_players=current_user.role.max_players,
             status=ClubStatusEnum.ACTIVE,
             location=club.location,
-            captains=[current_user.id],
+            captains_ids=[],
             pending_requests=[]
         )
         
@@ -52,6 +52,7 @@ def create_club(db: Session, club: ClubCreate, current_user: User) -> ClubFull:
         )
         
         db.add(db_member)
+        db.flush()
         db.commit()
         db.refresh(db_club)
         
@@ -68,6 +69,30 @@ def create_club(db: Session, club: ClubCreate, current_user: User) -> ClubFull:
             detail=f"Failed to create club: {str(e)}"
         )
 
+# Helper function to convert Club model to dict with captains
+def populate_captains(club: Club) -> dict:
+    """
+    Convert Club model to dict with captains
+    """
+    # Get all fields from the model
+    club_dict = {}
+    for column in club.__table__.columns:
+        club_dict[column.name] = getattr(club, column.name) # Get the value of the column
+    
+    # Add already loaded relationships
+    club_dict['admin'] = club.admin
+    club_dict['members'] = club.members
+    
+    # Find captains from the members based on captains_ids
+    captains = []
+    if club.captains_ids and club.members:
+        captains = [member for member in club.members if member.id in club.captains_ids]
+        logger.info(f"Found {len(captains)} captains for club {club.id}")
+    
+    club_dict['captains'] = captains
+    
+    return club_dict
+
 def search_clubs(
     current_user: User,
     db: Session, 
@@ -81,7 +106,11 @@ def search_clubs(
     logger.info(f"Searching clubs - name: {name}, sort: {sort_by}, sport: {sport_category}, private: {is_private}, skip: {skip}, limit: {limit}")
     
     try:
-        query = db.query(Club)
+        query = db.query(Club)\
+                .options(
+                    joinedload(Club.members).joinedload(Member.user),
+                    joinedload(Club.admin)
+                )
         
         if name:
             query = query.filter(Club.name.ilike(f"%{name}%"))
@@ -115,19 +144,16 @@ def search_clubs(
             query = query.order_by(distance_calc)
         else:
             query = query.order_by(Club.name)
-        
-        clubs = db.query(Club)\
-                .options(\
-                    joinedload(Club.members).joinedload(Member.user),
-                    joinedload(Club.admin),
-                    joinedload(Club.captains).joinedload(User.role)
-                    
-                )\
-                .offset(skip)\
-                .limit(limit)\
-                .all()        
+
+        clubs = query.offset(skip).limit(limit).all()
         logger.info(f"Found {len(clubs)} clubs matching criteria")
-        return [ClubFull.model_validate(club) for club in clubs]
+        
+        # Work on each club separately to add captains
+        result = []
+        for club in clubs:
+            club_dict = populate_captains(club)
+            result.append(ClubFull.model_validate(club_dict))
+        return result
         
     except HTTPException:
         raise
@@ -142,8 +168,13 @@ def get_club_by_id(db: Session, club_id: int) -> ClubFull:
     logger.info(f"Fetching club by ID: {club_id}")
     
     try:
-        club = db.query(Club).filter(Club.id == club_id).first()
-        
+        club = db.query(Club)\
+                .options(
+                    joinedload(Club.members).joinedload(Member.user),
+                    joinedload(Club.admin)
+                )\
+                .filter(Club.id == club_id)\
+                .first()
         if not club:
             logger.warning(f"Club not found with ID: {club_id}")
             raise HTTPException(
@@ -152,7 +183,8 @@ def get_club_by_id(db: Session, club_id: int) -> ClubFull:
             )
         
         logger.info(f"Found club: {club.name} (ID: {club_id})")
-        return ClubFull.model_validate(club)
+        club_dict = populate_captains(club)
+        return ClubFull.model_validate(club_dict)
         
     except HTTPException:
         raise
@@ -167,19 +199,43 @@ def get_user_clubs(db: Session, current_user: User) -> dict:
     logger.info(f"Fetching clubs for user: {current_user.id}")
     
     try:
-        owned_clubs = [ClubFull.model_validate(club) for club in current_user.owned_clubs]
-        member_clubs = [ClubFull.model_validate(membership.club) for membership in current_user.memberships]
+        # Load owned clubs with relationships
+        owned_clubs_query = db.query(Club)\
+                          .options(
+                              joinedload(Club.members).joinedload(Member.user),
+                              joinedload(Club.admin)
+                          )\
+                          .filter(Club.admin_id == current_user.id)\
+                          .all()
         
-        owned_ids = {club.id for club in owned_clubs}
-        member_clubs_filtered = [club for club in member_clubs if club.id not in owned_ids]
+        owned_clubs = []
+        for club in owned_clubs_query:
+            club_dict = populate_captains(club)
+            owned_clubs.append(ClubFull.model_validate(club_dict))
+        
+        # Load member clubs with relationships
+        member_clubs_query = db.query(Club)\
+                           .options(
+                               joinedload(Club.members).joinedload(Member.user),
+                               joinedload(Club.admin)
+                           )\
+                           .join(Member, Club.id == Member.club_id)\
+                           .filter(Member.user_id == current_user.id)\
+                           .filter(Club.admin_id != current_user.id)\
+                           .all()
+        
+        member_clubs = []
+        for club in member_clubs_query:
+            club_dict = populate_captains(club)
+            member_clubs.append(ClubFull.model_validate(club_dict))
         
         result_data = {
             "owned_clubs": owned_clubs,
-            "member_clubs": member_clubs_filtered,
-            "total_clubs": len(owned_clubs) + len(member_clubs_filtered)
+            "member_clubs": member_clubs,
+            "total_clubs": len(owned_clubs) + len(member_clubs)
         }
         
-        logger.info(f"User {current_user.id} has {result_data['total_clubs']} clubs ({len(owned_clubs)} owned, {len(member_clubs_filtered)} member)")
+        logger.info(f"User {current_user.id} has {result_data['total_clubs']} clubs ({len(owned_clubs)} owned, {len(member_clubs)} member)")
         return result_data
         
     except Exception as e:
@@ -281,11 +337,11 @@ def leave_club(db: Session, club_id: int, current_user: User) -> dict:
                 detail="User is not a member of this club"
             )
         
+        # Remove from captains_ids if member is captain
+        if member.id in club.captains_ids:
+            club.captains_ids.remove(member.id)
+        
         db.delete(member)
-        
-        if current_user.id in club.captains:
-            club.captains.remove(current_user.id)
-        
         db.commit()
         
         logger.info(f"User {current_user.id} left club {club_id} successfully")
