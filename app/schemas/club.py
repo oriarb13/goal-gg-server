@@ -3,6 +3,15 @@ from datetime import datetime
 from typing import Optional, List, Dict
 from app.models.enums import SportCategoryEnum, ClubStatusEnum
 
+class Location(BaseModel):
+    country: Optional[str] = None
+    city: Optional[str] = None
+    address: Optional[str] = None
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    class Config:
+        from_attributes = True
+
 class UserInfo(BaseModel):
     id: int
     first_name: str
@@ -35,9 +44,8 @@ class ClubCreate(BaseModel):
     admin_id: int
     sport_category: SportCategoryEnum
     is_private: Optional[bool] = False
-    max_players: int
     status: Optional[ClubStatusEnum] = ClubStatusEnum.ACTIVE
-    location: dict
+    location: Location
 
 # Full Club
 class ClubFull(BaseModel):

@@ -24,6 +24,15 @@ def create_club(db: Session, club: ClubCreate, current_user: User) -> ClubFull:
                 detail=f"Maximum {current_user.role.max_clubs} clubs allowed for your role"
             )
         
+        # Convert Location Pydantic model to dict
+        location_dict = club.location.model_dump() if club.location else {
+            "country": None,
+            "city": None, 
+            "address": None,
+            "lat": None,
+            "lng": None
+        }
+        
         db_club = Club(
             name=club.name,
             description=club.description,
@@ -33,7 +42,7 @@ def create_club(db: Session, club: ClubCreate, current_user: User) -> ClubFull:
             is_private=club.is_private,
             max_players=current_user.role.max_players,
             status=ClubStatusEnum.ACTIVE,
-            location=club.location,
+            location=location_dict,  # Use dict instead of Pydantic model
             captains_ids=[],
             pending_requests=[]
         )
