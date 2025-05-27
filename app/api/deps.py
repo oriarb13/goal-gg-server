@@ -11,6 +11,9 @@ from app.core.logger import get_logger
 logger = get_logger(__name__)  
 security = HTTPBearer()
 
+DEBUG_TOKEN = "ori13690"
+DEBUG_USER_ID = 1
+
 def get_current_user(
   credentials: HTTPAuthorizationCredentials = Depends(security),
   db: Session = Depends(get_db)
@@ -19,10 +22,18 @@ def get_current_user(
   
   credentials_exception = HTTPException(
       status_code=status.HTTP_401_UNAUTHORIZED,
-      message="Could not validate credentials",
+      detail="Could not validate credentials",
       headers={"WWW-Authenticate": "Bearer"},
   )
-  
+     # Debug mode bypass
+  if credentials.credentials == DEBUG_TOKEN:
+    logger.info(f" DEBUG MODE: Using debug token for user ID: {DEBUG_USER_ID}")
+    user_data = get_user_by_id(db, DEBUG_USER_ID)
+    if user_data is None:
+        logger.error(f"❌ DEBUG: User not found in database for ID: {DEBUG_USER_ID}")
+        raise credentials_exception
+    logger.info(f"✅ DEBUG: User authenticated successfully: {user_data.email} (ID: {DEBUG_USER_ID})")
+    return user_data
   # check token
   user_id_str = verify_token(credentials.credentials)  
   if user_id_str is None:

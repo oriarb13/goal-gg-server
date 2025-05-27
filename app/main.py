@@ -31,7 +31,7 @@ app.include_router(users.router,   prefix="/users", tags=["users"])
 app.include_router(clubs.router,   prefix="/clubs", tags=["clubs"])
 @app.get("/")
 async def root():
-    return {"message": "Welcome to GoalGG API"}
+    return {"message": "Welcome to GoalGG API ori arbeli"}
 
 @app.get("/health")
 async def health_check():

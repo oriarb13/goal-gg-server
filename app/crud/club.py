@@ -1,4 +1,4 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, case, and_, or_
 from typing import Optional, List
 from app.models.club import Club
@@ -116,7 +116,16 @@ def search_clubs(
         else:
             query = query.order_by(Club.name)
         
-        clubs = query.offset(skip).limit(limit).all()
+        clubs = db.query(Club)\
+                .options(\
+                    joinedload(Club.members).joinedload(Member.user),
+                    joinedload(Club.admin),
+                    joinedload(Club.captains).joinedload(User.role)
+                    
+                )\
+                .offset(skip)\
+                .limit(limit)\
+                .all()        
         logger.info(f"Found {len(clubs)} clubs matching criteria")
         return [ClubFull.model_validate(club) for club in clubs]
         

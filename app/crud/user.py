@@ -1,4 +1,4 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import Optional, List
 from datetime import datetime, timedelta
 from app.models.user import User
@@ -6,6 +6,7 @@ from app.schemas.user import UserCreate, UserFull
 from app.utils.security import hash_password, verify_password
 from app.core.logger import get_logger
 from fastapi import HTTPException
+from app.models.member import Member
 
 logger = get_logger(__name__)
 
@@ -96,7 +97,17 @@ def get_all_users(db: Session, skip: int = 0, limit: int = 100) -> List[UserFull
     logger.info(f"Fetching users with skip={skip}, limit={limit}")
     
     try:
-        users = db.query(User).offset(skip).limit(limit).all()
+        # users = db.query(User).offset(skip).limit(limit).all()
+        users = db.query(User)\
+                .options(\
+                    joinedload(User.role),
+                    joinedload(User.memberships).joinedload(Member.club),
+                    joinedload(User.owned_clubs)
+                    
+                )\
+                .offset(skip)\
+                .limit(limit)\
+                .all()        
         logger.info(f"Successfully fetched {len(users)} users")
         return [UserFull.model_validate(user) for user in users]
         
@@ -111,7 +122,16 @@ def get_user_by_id(db: Session, user_id: int) -> UserFull:
     logger.info(f"Fetching user by ID: {user_id}")
     
     try:
-        user = db.query(User).filter(User.id == user_id).first()
+        # user = db.query(User).filter(User.id == user_id).first()
+        user = db.query(User)\
+                .options(\
+                    joinedload(User.role),
+                    joinedload(User.memberships).joinedload(Member.club),
+                    joinedload(User.owned_clubs)
+                    
+                )\
+                .filter(User.id == user_id)\
+                .first()
         
         if not user:
             logger.warning(f"User not found with ID: {user_id}")

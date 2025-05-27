@@ -97,6 +97,11 @@ celerybeat.pid
 
 # Environments
 .env
+.env.local
+.env.development
+.env.test
+.env.production
+.env.staging
 .venv
 env/
 venv/
@@ -124,7 +129,11 @@ dmypy.json
 
 # Database
 *.db
+*.sqlite
+*.sqlite3
 test.db
+postgres_data/
+pg_data/
 
 # IDE
 .vscode/
@@ -141,3 +150,119 @@ test.db
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# ===== FastAPI Specific =====
+# Application logs
+*.log
+logs/
+app.log
+uvicorn.log
+gunicorn.log
+
+# Static files and uploads
+static/uploads/
+media/
+uploads/
+profile_pictures/
+club_images/
+
+# Security and secrets
+*.pem
+*.key
+*.crt
+secrets/
+.secrets/
+
+# ===== Alembic =====
+# Don't ignore alembic files, but ignore backup migrations
+alembic/versions/*_backup.py
+alembic/versions/backup/
+
+# ===== Docker =====
+# Docker override files
+docker-compose.override.yml
+.dockerignore
+
+# ===== Testing =====
+# Test artifacts
+.coverage.*
+test_*.db
+test_*.sqlite
+test_results/
+htmlcov/
+.tox/
+
+# ===== Production/Deployment =====
+# Deployment configs
+.terraform/
+terraform.tfstate*
+ansible/vault_pass.txt
+deployment/secrets/
+k8s/secrets/
+
+# ===== Scripts =====
+# Temporary scripts and data
+scripts/temp/
+scripts/*.tmp
+temp_data/
+backup_data/
+exports/
+
+# ===== Cache =====
+# Redis dumps
+dump.rdb
+*.rdb
+
+# ===== Monitoring =====
+# Prometheus data
+prometheus_data/
+
+# Grafana data
+grafana_data/
+
+# ===== Development Tools =====
+# Python debug
+.debug/
+debug.py
+test_script.py
+
+# Jupyter
+*.ipynb
+
+# ===== File Uploads (Development) =====
+# User uploaded content (development)
+user_uploads/
+temp_uploads/
+profile_images/
+club_logos/
+
+# ===== Backup Files =====
+*.backup
+*.bak
+*.orig
+*~
+
+# ===== Local Development =====
+# Local development overrides
+local_settings.py
+dev_settings.py
+.local/
+
+# ===== Package managers =====
+# Poetry
+poetry.lock
+
+# Pipenv
+Pipfile.lock
+
+# ===== SSL/TLS =====
+*.pem
+*.key
+*.crt
+*.p12
+ssl/
+
+# ===== Logs and temporary files =====
+*.tmp
+*.temp
+nohup.out

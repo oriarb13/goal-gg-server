@@ -1,29 +1,17 @@
 version: "3.8"
 
 services:
-  db:
-    image: postgres:15
-    restart: always
-    environment:
-      POSTGRES_USER: username
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: your_database_name
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-
   app:
-    build: .
-    restart: always
+    build: . 
+    restart: unless-stopped
     ports:
       - "8000:8000"
-    depends_on:
-      - db
-    environment:
-      DATABASE_URL: postgresql://username:password@db:5432/your_database_name
     volumes:
-      - .:/app
+      - .:/app #mount the current directory to the container
+    env_file:
+      - .env.docker
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
 volumes:
   postgres_data:

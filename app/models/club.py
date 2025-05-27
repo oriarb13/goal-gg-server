@@ -18,8 +18,8 @@ class Club(Base):
     # Admin & Captains
     admin_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     admin = relationship("User", foreign_keys=[admin_id],back_populates="owned_clubs")
-    captains = Column(ARRAY(Integer), default=[])  # IDs of captains
-    
+    captains_ids = Column(ARRAY(Integer),ForeignKey("members.id"), default=[])  # IDs of captains as members
+    captains = relationship("Member", foreign_keys=[captains_ids])
     # Sport
     sport_category = Column(ENUM(SportCategoryEnum), nullable=False)
     
