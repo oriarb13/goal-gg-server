@@ -174,20 +174,53 @@ def join_club(
             status=500
         )
 
+@router.post("/{club_id}/accept-request/{request_id}")
+def accept_request(
+    club_id: int,
+    request_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    logger.info(f"POST /clubs/{club_id}/accept-request/{request_id} - Request by user: {current_user.email}")
+    
+    try:
+        result = crud_club.accept_request(db, club_id, current_user, request_id)
+        logger.info(f"Accept request {request_id} for club {club_id} processed by: {current_user.email}")
+        return success_response(
+            data=result,
+            message="Request accepted successfully",
+            status=200
+        )
+    except HTTPException as e:
+        return error_response(
+            message=e.detail,
+            status=e.status_code
+        )
+    except Exception as e:
+        logger.error(f"Accept request processing error: {e}")
+        return error_response(
+            message=f"Failed to accept request: {str(e)}",
+            status=500
+        )
+
 @router.delete("/{club_id}/leave")
 def leave_club(
     club_id: int,
+    user_id: Optional[int] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     logger.info(f"DELETE /clubs/{club_id}/leave - Request by user: {current_user.email}")
     
     try:
-        result = crud_club.leave_club(db, club_id, current_user)
+        result = crud_club.leave_club(db, club_id, current_user, user_id)
+        
+        message = f"User removed from club successfully" if user_id else "Successfully left the club"
+        
         logger.info(f"Leave club {club_id} processed for: {current_user.email}")
         return success_response(
             data=result,
-            message="Successfully left the club",
+            message=message,
             status=200
         )
     except HTTPException as e:
@@ -201,3 +234,4 @@ def leave_club(
             message=f"Failed to leave club: {str(e)}",
             status=500
         )
+

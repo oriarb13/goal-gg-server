@@ -2,11 +2,12 @@ from sqlalchemy.orm import Session, joinedload
 from typing import Optional, List
 from datetime import datetime, timedelta
 from app.models.user import User
+from app.models.member import Member
+from app.models.club import Club
 from app.schemas.user import UserCreate, UserFull
 from app.utils.security import hash_password, verify_password
 from app.core.logger import get_logger
 from fastapi import HTTPException
-from app.models.member import Member
 
 logger = get_logger(__name__)
 

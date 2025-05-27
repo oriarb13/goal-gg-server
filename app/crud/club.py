@@ -292,13 +292,17 @@ def join_club(db: Session, club_id: int, current_user: User) -> dict:
         
         # check if club is private
         if club.is_private:
-            if current_user.id not in club.pending_requests:
-                club.pending_requests.append(current_user.id)
+            current_requests = list(club.pending_requests or [])
+        
+            if current_user.id not in current_requests:
+                current_requests.append(current_user.id)
+                club.pending_requests = current_requests
+            
                 db.commit()
+                logger.info(f"Added user {current_user.id} to pending requests for club {club_id}")
                 return {"request_status": "pending"}
             else:
-                return {"request_status": "already_pending"}
-        
+                return {"request_status": "already_pending"}       
         # add user to club
         new_member = Member(
             user_id=current_user.id,
@@ -339,7 +343,7 @@ def accept_request(db: Session, club_id: int, current_user: User, request_id: in
                 detail=f"Club not found with ID: {club_id}"
             )
         
-        if club.admin_id != current_user.id:
+        if club.admin_id != current_user.id and current_user.role.id != 5:
             logger.warning(f"User {current_user.id} is not the admin of club {club_id}")
             raise HTTPException(
                 status_code=403,
@@ -369,7 +373,10 @@ def accept_request(db: Session, club_id: int, current_user: User, request_id: in
         db.refresh(new_member)
 
         # remove request from pending_requests
-        club.pending_requests.remove(request_id)
+        current_requests = list(club.pending_requests or [])
+        if request_id in current_requests:
+            current_requests.remove(request_id)
+            club.pending_requests = current_requests
         db.commit()
 
         logger.info(f"Request accepted for club {club_id} by user {current_user.id}")
@@ -398,10 +405,15 @@ def leave_club(db: Session, club_id: int, current_user: User , user_id: Optional
                 detail=f"Club not found with ID: {club_id}"
             )
         
-        if club.admin_id == current_user.id and user_id == None:
+        if club.admin_id == current_user.id and user_id == None or user_id == club.admin_id:
             raise HTTPException(
                 status_code=403,
                 detail="Club admin cannot leave the club"
+            )
+        if current_user.role.id != 5 and current_user.role.id != club.admin_id and user_id != current_user.id:
+            raise HTTPException(
+                status_code=403,
+                detail="Only club admin or super admin can remove a member from the club"
             )
         if user_id:
             member = db.query(Member).filter(
@@ -421,8 +433,10 @@ def leave_club(db: Session, club_id: int, current_user: User , user_id: Optional
             )
         
         # Remove from captains_ids if member is captain
-        if member.id in club.captains_ids:
-            club.captains_ids.remove(member.id)
+        if club.captains_ids and member.id in club.captains_ids:
+            current_captains = list(club.captains_ids)
+            current_captains.remove(member.id)
+            club.captains_ids = current_captains
         
         db.delete(member)
         db.commit()

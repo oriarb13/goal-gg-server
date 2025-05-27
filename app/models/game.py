@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, func
 from sqlalchemy.dialects.postgresql import JSON, ARRAY
 from sqlalchemy.orm import relationship
 
@@ -19,4 +19,6 @@ class Game(Base):
 
     result = Column(JSON)  # {"team_a": 3, "team_b": 1}
     winner = Column(String) 
-    
+    #timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
