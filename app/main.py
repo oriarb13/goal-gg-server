@@ -20,13 +20,10 @@ app = FastAPI(
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",  # Vite development server
-        "http://127.0.0.1:5173",
-        "*"  
-    ],    allow_credentials=True, #cookies
-    allow_methods=["*"], #all crud methods
-    allow_headers=["*"], #all headers
+    allow_origins=["http://localhost:5173"],  
+    allow_credentials=True, 
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Include routers   //imported       //the rout      //swagger
