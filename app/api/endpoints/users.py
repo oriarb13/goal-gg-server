@@ -77,6 +77,17 @@ def login_user(
             status=500
         )
 
+@router.get("/auth")
+def auth(current_user: User = Depends(get_current_user)):
+    logger.info(f"GET /users/auth - User: {current_user.email}")
+    
+    return success_response(
+        data=current_user,
+        message="User is authenticated",
+        status=200
+    )
+
+
 @router.get("/")
 def get_all_users(
     current_user: User = Depends(get_current_user),
