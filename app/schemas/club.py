@@ -71,7 +71,7 @@ class ClubFull(BaseModel):
         from_attributes = True
 
 #for single club page
-class clubById
+class clubById(BaseModel):
     id: int
     name: str
     description: str
