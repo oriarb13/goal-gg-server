@@ -69,3 +69,27 @@ class ClubFull(BaseModel):
     
     class Config:
         from_attributes = True
+
+#for single club page
+class clubById
+    id: int
+    name: str
+    description: str
+    image: str
+    admin_id: int
+    admin: Optional[UserInfo] = None  # admin info
+    captains_ids: Optional[List[int]] = []  
+    captains: Optional[List[MemberInfo]] = []  # captains info
+    sport_category: SportCategoryEnum
+    is_private: bool
+    max_players: int
+    status: Optional[ClubStatusEnum] = None
+    location: Optional[Dict] = None
+    pending_requests: Optional[List[int]] = []
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    members: Optional[List[MemberInfo]] = []  # members info
+    
+    class Config:
+        from_attributes = True
+
