@@ -9,6 +9,7 @@ from app.models.user import User
 from app.models.member import Member
 from app.models.enums import ClubStatusEnum
 from fastapi import HTTPException
+from app.core.sse_manager import sse_manager, create_club_join_event, create_member_joined_event, create_member_approved_event
 
 logger = get_logger(__name__)
 
@@ -265,12 +266,14 @@ def join_club(db: Session, club_id: int, current_user: User) -> dict:
                 )\
                 .filter(Club.id == club_id)\
                 .first()
+        
         # check if club exists
         if not club:
             raise HTTPException(
                 status_code=404,
                 detail=f"Club not found with ID: {club_id}"
             )
+        
         # check if user is already a member
         existing_member = db.query(Member).filter(
             Member.club_id == club_id,
@@ -282,6 +285,7 @@ def join_club(db: Session, club_id: int, current_user: User) -> dict:
                 status_code=409,
                 detail="User is already a member of this club"
             )
+        
         # check if club is full
         current_members_count = len(club.members)
         if current_members_count >= club.max_players:
@@ -299,11 +303,30 @@ def join_club(db: Session, club_id: int, current_user: User) -> dict:
                 club.pending_requests = current_requests
             
                 db.commit()
-                logger.info(f"Added user {current_user.id} to pending requests for club {club_id}")
+                
+                # 🆕 שלח SSE event לאדמין על בקשה חדשה
+                user_name = f"{current_user.first_name} {current_user.last_name}"
+                event = create_club_join_event(
+                    club_id=club_id,
+                    user_id=current_user.id,
+                    user_name=user_name,
+                    admin_id=club.admin_id
+                )
+                
+                # שלח באופן אסינכרוני (לא חוסם)
+                import asyncio
+                try:
+                    asyncio.create_task(sse_manager.send_to_user(club.admin_id, event))
+                except RuntimeError:
+                    # אם אין event loop פעיל, נדלג על השליחה
+                    logger.warning(f"Could not send SSE event - no active event loop")
+                
+                logger.info(f"Added user {current_user.id} to pending requests for club {club_id} and sent SSE notification")
                 return {"request_status": "pending"}
             else:
-                return {"request_status": "already_pending"}       
-        # add user to club
+                return {"request_status": "already_pending"}
+        
+        # add user to club (public club)
         new_member = Member(
             user_id=current_user.id,
             club_id=club_id,
@@ -317,6 +340,21 @@ def join_club(db: Session, club_id: int, current_user: User) -> dict:
         db.add(new_member)
         db.commit()
         db.refresh(new_member)
+        
+        # 🆕 שלח SSE event על הצטרפות מוצלחת למועדון ציבורי
+        user_name = f"{current_user.first_name} {current_user.last_name}"
+        event = create_member_joined_event(
+            club_id=club_id,
+            user_id=current_user.id,
+            user_name=user_name
+        )
+        
+        # שלח לאדמין
+        import asyncio
+        try:
+            asyncio.create_task(sse_manager.send_to_user(club.admin_id, event))
+        except RuntimeError:
+            logger.warning(f"Could not send SSE event - no active event loop")
         
         logger.info(f"User {current_user.id} joined club {club_id} successfully")
         return {"membership_status": "joined"}
@@ -336,6 +374,7 @@ def accept_request(db: Session, club_id: int, current_user: User, request_id: in
     try:
         club = db.query(Club).filter(Club.id == club_id).first()
         user_request = db.query(User).filter(User.id == request_id).first()
+        
         if not club:
             logger.warning(f"Club not found with ID: {club_id}")
             raise HTTPException(
@@ -379,8 +418,37 @@ def accept_request(db: Session, club_id: int, current_user: User, request_id: in
             club.pending_requests = current_requests
         db.commit()
 
+        # 🆕 שלח SSE events
+        user_name = f"{user_request.first_name} {user_request.last_name}"
+        
+        # 1. שלח לאדמין שהבקשה אושרה
+        admin_event = create_member_joined_event(
+            club_id=club_id,
+            user_id=request_id,
+            user_name=user_name
+        )
+        
+        # 2. שלח למשתמש שהבקשה שלו אושרה
+        user_event = create_member_approved_event(
+            club_id=club_id,
+            user_id=request_id,
+            user_name=user_name
+        )
+        
+        import asyncio
+        try:
+            # שלח לשני המשתמשים
+            asyncio.create_task(sse_manager.send_to_user(current_user.id, admin_event))
+            asyncio.create_task(sse_manager.send_to_user(request_id, user_event))
+        except RuntimeError:
+            logger.warning(f"Could not send SSE events - no active event loop")
+
         logger.info(f"Request accepted for club {club_id} by user {current_user.id}")
-        return {"membership_status": "joined"}
+        return {
+            "membership_status": "joined",
+            "user_id": request_id,
+            "user_name": user_name
+        }
 
     except HTTPException:
         raise

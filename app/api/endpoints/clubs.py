@@ -11,6 +11,11 @@ from app.utils.response import success_response, error_response
 from app.api.deps import get_current_user
 from app.core.logger import get_logger
 
+# pubsub
+from fastapi.responses import StreamingResponse
+from app.core.sse_manager import sse_manager
+import asyncio
+
 logger = get_logger(__name__)
 router = APIRouter()
 
@@ -235,3 +240,53 @@ def leave_club(
             status=500
         )
 
+
+# pubsub
+@router.get("/notifications/stream")
+async def club_notifications_stream(
+    current_user: User = Depends(get_current_user)
+):
+    """
+    SSE endpoint for real-time club notifications
+    מיועד לאדמינים שרוצים לקבל התראות על פעילות במועדונים שלהם
+    """
+    logger.info(f"SSE connection initiated by user: {current_user.email}")
+    
+    async def event_generator():
+        # יצירת חיבור SSE עבור המשתמש
+        queue = await sse_manager.connect(current_user.id)
+        
+        try:
+            # שלח heartbeat ראשוני
+            yield f"data: {{'type': 'connected', 'message': 'החיבור הוקם בהצלחה'}}\n\n"
+            
+            while True:
+                try:
+                    # המתן לאירוע חדש (עם timeout של 30 שניות)
+                    event = await asyncio.wait_for(queue.get(), timeout=30.0)
+                    yield event.to_sse_format()
+                    
+                except asyncio.TimeoutError:
+                    # שלח heartbeat כדי לשמור על החיבור חי
+                    yield f"data: {{'type': 'heartbeat', 'timestamp': '{asyncio.get_event_loop().time()}'}}\n\n"
+                    
+                except Exception as e:
+                    logger.error(f"Error in SSE event generator for user {current_user.id}: {e}")
+                    break
+                    
+        except Exception as e:
+            logger.error(f"SSE connection error for user {current_user.id}: {e}")
+        finally:
+            # ניקוי החיבור
+            await sse_manager.disconnect(current_user.id, queue)
+            logger.info(f"SSE connection closed for user: {current_user.email}")
+    
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/plain",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Content-Type": "text/event-stream",
+        }
+    )
