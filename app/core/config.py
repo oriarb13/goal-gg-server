@@ -10,7 +10,7 @@ class Settings(BaseSettings): # Class Inheritance:
     # jwt
     SECRET_KEY: str = "your-secret-key-here" 
     ALGORITHM: str = "HS256" 
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30 
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 1000 
     
     # CORS
     ALLOWED_HOSTS: List[str] = ["*"] 
